@@ -3,15 +3,12 @@ import 'dart:developer';
 import 'dart:ui' as ui;
 
 import 'package:another_brother/printer_info.dart' as pi;
-import 'package:another_brother/printer_info.dart';
-import 'package:another_brother/printer_info.dart';
-import 'package:another_brother/type_b_printer.dart';
+import 'package:demo_project/widget/test_para_widget.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:another_brother/label_info.dart';
-import 'package:another_brother/printer_info.dart';
 
 import 'package:demo_project/models/print_item.dart';
 import 'package:widgets_to_image/widgets_to_image.dart';
@@ -26,13 +23,13 @@ class PrintPage extends StatefulWidget {
 }
 
 class _PrintPageState extends State<PrintPage> {
-  List<BluetoothPrinter> printers = [];
+  List<pi.BluetoothPrinter> printers = [];
 
-  Printer printer = Printer();
-  PrinterInfo printerInfo = PrinterInfo();
+  pi.Printer printer = pi.Printer();
+  pi.PrinterInfo printerInfo = pi.PrinterInfo();
   bool printerSet = false;
 
-  final printerModelName = Model.PT_P710BT;
+  final printerModelName = pi.Model.PT_P710BT;
 
   WidgetsToImageController controller = WidgetsToImageController();
   Uint8List? bytes;
@@ -48,9 +45,9 @@ class _PrintPageState extends State<PrintPage> {
   }
 
   Future<void> initializePrinter() async {
-    printerInfo.printerModel = Model.PT_P710BT;
-    printerInfo.paperSize = PaperSize.CUSTOM;
-    printerInfo.printMode = PrintMode.FIT_TO_PAGE;
+    printerInfo.printerModel = pi.Model.PT_P710BT;
+    printerInfo.paperSize = pi.PaperSize.CUSTOM;
+    printerInfo.printMode = pi.PrintMode.FIT_TO_PAGE;
     printerInfo.orientation = pi.Orientation.LANDSCAPE;
     // Disable cutting after every page
     printerInfo.isAutoCut = false;
@@ -58,9 +55,33 @@ class _PrintPageState extends State<PrintPage> {
     printerInfo.isCutAtEnd = true;
     // Allow for cutting mid page
     printerInfo.isHalfCut = false;
-    printerInfo.port = Port.BLUETOOTH;
+    printerInfo.port = pi.Port.BLUETOOTH;
     // Set the label type.
-   printerInfo.labelNameIndex = PT.ordinalFromID(PT.W24.getId());
+   printerInfo.labelNameIndex = PT.ordinalFromID(PT.W12.getId());
+
+    double width = 12.0;
+    double rightMargin = 0.0;
+    double leftMargin = 0.0;
+    double topMargin = 0.0;
+
+    final Map<dynamic, dynamic> paperMap = {
+      'printerModel' : pi.Model.PT_P710BT.toMap(),
+      'paperKind' : pi.PaperKind.ROLL.toMap(),
+      'unit': pi.Unit.Mm.toMap(),
+      'tapeWidth': width,
+    'tapeLength': 20.0,
+    'rightMargin':rightMargin,
+    'leftMargin':rightMargin,
+    'topMargin':rightMargin,
+    'bottomMargin':rightMargin,
+    'labelPitch':rightMargin,
+    'markPosition':rightMargin,
+    'markHeight':rightMargin,
+    };
+
+    pi.CustomPaperInfo? customPaperInfo = pi.CustomPaperInfo.fromMap(paperMap);
+
+    printerInfo.customPaperInfo = customPaperInfo;
 
     // Set the printer info so we can use the SDK to get the printers.
     await printer.setPrinterInfo(printerInfo);
@@ -82,6 +103,7 @@ class _PrintPageState extends State<PrintPage> {
         child: Column(
           children: [
             item(),
+            TestParaWidget(printItem: widget.printItem,),
             const Divider(),
             printersList(),
           ],
@@ -100,7 +122,7 @@ class _PrintPageState extends State<PrintPage> {
   }
 
   Widget printersList() {
-    return FutureBuilder<List<BluetoothPrinter>>(
+    return FutureBuilder<List<pi.BluetoothPrinter>>(
       future: printer.getBluetoothPrinters([printerModelName.getName()]),
       builder: (context, snapshot) {
         switch (snapshot.connectionState) {
@@ -193,7 +215,7 @@ class _PrintPageState extends State<PrintPage> {
     );
   }
 
-  Widget _printerTile({required List<BluetoothPrinter> printers, required BluetoothPrinter printer}) {
+  Widget _printerTile({required List<pi.BluetoothPrinter> printers, required pi.BluetoothPrinter printer,}) {
     return ListTile(
       onTap: () => _print(printers, printer,),
       leading: const Icon(Icons.print),
@@ -204,28 +226,46 @@ class _PrintPageState extends State<PrintPage> {
     );
   }
 
-  Future<void> _print(List<BluetoothPrinter> printers, BluetoothPrinter selectedPrinter,) async {
+  Future<void> _print(List<pi.BluetoothPrinter> printers, pi.BluetoothPrinter selectedPrinter,) async {
     try {
       /// capture the widget image
-      final bytes = await controller.capture();
+      //final bytes = await controller.capture();
 
       // Get the IP Address from the first printer found.
       printerInfo.macAddress = printers.single.macAddress;
+
       await printer.setPrinterInfo(printerInfo);
 
       ///Text Style
-      TextStyle style =const TextStyle(
+      ui.TextStyle style = ui.TextStyle(
         color: Colors.black,
-        fontSize: 24,
+        fontSize: 60,
       );
 
-      final para = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 14, ))..pushStyle(style.getTextStyle())..addText(widget.printItem.title);
+      final paragraphStyle = ui.ParagraphStyle(
+        textDirection: TextDirection.ltr,
+      );
 
-      final p = para.build()..layout(const ui.ParagraphConstraints(width: 35));
+      final paragraphBuilder = ui.ParagraphBuilder(paragraphStyle)
+        ..pushStyle(style)
+        ..addText(widget.printItem.title);
+        //..addPlaceholder(
+          //20,
+          //100,
+          //PlaceholderAlignment.middle,
+        //);
+      ///paragraph constraints required, w/o it optimized out error
+      const constraints = ui.ParagraphConstraints(width: 200);
+      final paragraph = paragraphBuilder.build();
+      paragraph.layout(constraints);
+      ///Setting offset in negative doesn't help, as it clips of the initial characters of the text
+      final status = await printer.printText(paragraph);
 
-      final status = await printer.printText(p);
-      //final status = await printer.printImage(await bytesToImage(bytes!));
+      ///Image port, this works good.
+      //final bytes = await rootBundle.load(widget.printItem.imageAsset);
+      //final imgStatus = await printer.printImage(await bytesToImage(bytes.buffer.asUint8List()));
       print('Got Status : $status');
+      //print('Got Status : $imgStatus');
     } on Exception catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -241,3 +281,10 @@ class _PrintPageState extends State<PrintPage> {
     return frame.image;
   }
 }
+
+///Properties to look for :
+///1) Tape length
+///2) Font size
+///3) Tape width (9 mm may be)
+///4) Text direction (Horizontal only)
+///5) Label Alignment (Left)
