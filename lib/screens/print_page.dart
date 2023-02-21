@@ -3,7 +3,6 @@ import 'dart:developer';
 import 'dart:ui' as ui;
 
 import 'package:another_brother/printer_info.dart' as pi;
-import 'package:demo_project/widget/test_para_widget.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +10,8 @@ import 'package:flutter/services.dart';
 import 'package:another_brother/label_info.dart';
 
 import 'package:demo_project/models/print_item.dart';
-import 'package:widgets_to_image/widgets_to_image.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class PrintPage extends StatefulWidget {
   final PrintItem printItem;
@@ -31,7 +31,10 @@ class _PrintPageState extends State<PrintPage> {
 
   final printerModelName = pi.Model.PT_P710BT;
 
-  WidgetsToImageController controller = WidgetsToImageController();
+  double fontSize = 20;
+  double tapeLength = 35;
+  double position = 150;
+
   Uint8List? bytes;
 
   @override
@@ -45,49 +48,13 @@ class _PrintPageState extends State<PrintPage> {
   }
 
   Future<void> initializePrinter() async {
-    printerInfo.printerModel = pi.Model.PT_P710BT;
-    printerInfo.paperSize = pi.PaperSize.CUSTOM;
-    printerInfo.printMode = pi.PrintMode.FIT_TO_PAGE;
-    printerInfo.orientation = pi.Orientation.LANDSCAPE;
-    // Disable cutting after every page
-    printerInfo.isAutoCut = false;
-    // Disable end cut.
-    printerInfo.isCutAtEnd = true;
-    // Allow for cutting mid page
-    printerInfo.isHalfCut = false;
-    printerInfo.port = pi.Port.BLUETOOTH;
-    // Set the label type.
-   printerInfo.labelNameIndex = PT.ordinalFromID(PT.W12.getId());
-
-    double width = 12.0;
-    double rightMargin = 0.0;
-    double leftMargin = 0.0;
-    double topMargin = 0.0;
-
-    final Map<dynamic, dynamic> paperMap = {
-      'printerModel' : pi.Model.PT_P710BT.toMap(),
-      'paperKind' : pi.PaperKind.ROLL.toMap(),
-      'unit': pi.Unit.Mm.toMap(),
-      'tapeWidth': width,
-    'tapeLength': 20.0,
-    'rightMargin':rightMargin,
-    'leftMargin':rightMargin,
-    'topMargin':rightMargin,
-    'bottomMargin':rightMargin,
-    'labelPitch':rightMargin,
-    'markPosition':rightMargin,
-    'markHeight':rightMargin,
-    };
-
-    pi.CustomPaperInfo? customPaperInfo = pi.CustomPaperInfo.fromMap(paperMap);
-
-    printerInfo.customPaperInfo = customPaperInfo;
-
-    // Set the printer info so we can use the SDK to get the printers.
-    await printer.setPrinterInfo(printerInfo);
-    setState(() {
-      printerSet = true;
-    });
+    printerInfo
+      ..printerModel = pi.Model.PT_P710BT
+      ..isAutoCut = true
+      ..labelNameIndex = PT.ordinalFromID(PT.W12.getId())
+      ..orientation = pi.Orientation.LANDSCAPE;
+    // // Set the printer info so we can use the SDK to get the printers.
+    // await printer.setPrinterInfo(printerInfo);
   }
 
   @override
@@ -97,188 +64,228 @@ class _PrintPageState extends State<PrintPage> {
         // automaticallyImplyLeading: false,
         title: const Text('Select Printer'),
       ),
-      body: printerSet
-          ? Padding(
+      body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(
           children: [
-            item(),
-            TestParaWidget(printItem: widget.printItem,),
+            _body(),
             const Divider(),
-            printersList(),
+            // printersList(),
           ],
         ),
-      )
-          : _loading(),
-    );
-  }
-
-  Widget _loading() {
-    return const Center(
-      child: CupertinoActivityIndicator(
-        animating: true,
       ),
-    );
-  }
-
-  Widget printersList() {
-    return FutureBuilder<List<pi.BluetoothPrinter>>(
-      future: printer.getBluetoothPrinters([printerModelName.getName()]),
-      builder: (context, snapshot) {
-        switch (snapshot.connectionState) {
-          case ConnectionState.none:
-          case ConnectionState.waiting:
-          case ConnectionState.active:
-            return _loading();
-
-          case ConnectionState.done:
-            {
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text(snapshot.error.toString()),
-                );
-              } else {
-                if (snapshot.data != null) {
-                  if (snapshot.data!.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No Device Found',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  } else {
-                    return Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        children: [
-                          Visibility(
-                            visible: snapshot.data!.isNotEmpty,
-                            child: const Text(
-                              'Tap on printer to print',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const Divider(),
-                          ListView.builder(
-                            shrinkWrap: true,
-
-                            itemCount: snapshot.data!.length,
-                            itemBuilder: (context, index) {
-                              return _printerTile(
-                                printers: snapshot.data!,
-                                  printer: snapshot.data![index]);
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                } else {
-                  return const Center(
-                    child: Text(
-                      'Cannot fetch devices',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  );
-                }
-              }
-            }
-
-          default:
-            return _loading();
-        }
-      },
-    );
-  }
-
-  Widget item() {
-    return WidgetsToImage(
-      controller: controller,
-      child: ListTile(
-        leading: Text(
-          widget.printItem.title,
-          style: const TextStyle(
-            fontSize: 24,
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+              onPressed: () {
+                setState(() {
+                  position -= 5;
+                });
+              },
+              child: const Icon(Icons.arrow_upward)),
+          FloatingActionButton(
+              onPressed: () {
+                setState(() {
+                  position += 5;
+                });
+              },
+              child: const Icon(Icons.arrow_downward)),
+          FloatingActionButton(
+            onPressed: () {
+              _print(context);
+            },
+            tooltip: 'Print',
+            child: const Icon(Icons.print),
           ),
+        ],
+      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+
+  Widget _body() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Center(
+        // Center is a layout widget. It takes a single child and positions it
+        // in the middle of the parent.
+        child: Column(
+          children: [
+            const Text(
+              'Font Size',
+              style: TextStyle(fontSize: 25),
+            ),
+            Slider(
+              label: 'Font Size',
+              value: fontSize,
+              divisions: 40,
+              min: 10,
+              max: 50,
+              activeColor: Colors.blueAccent,
+              inactiveColor: Colors.white,
+              onChanged: (value) {
+                setState(() {
+                  fontSize = value;
+                });
+              },
+            ),
+            const Text(
+              'Tape Length',
+              style: TextStyle(
+                fontSize: 25,
+              ),
+            ),
+            Slider(
+              label: 'Tape length',
+              value: tapeLength,
+              divisions: 4,
+              min: 35,
+              max: 65,
+              onChanged: (value) {
+                setState(
+                      () {
+                    tapeLength = value;
+                  },
+                );
+              },
+            ),
+            FutureBuilder(
+              future: _getWidgetImage(),
+              builder:
+                  (BuildContext context, AsyncSnapshot<ByteData> snapshot) {
+                if (snapshot.hasData) {
+                  return Image.memory(Uint8List.view(snapshot.data!.buffer));
+                }
+
+                return const CircularProgressIndicator();
+              },
+            ),
+          ],
         ),
-        trailing: Image.asset(widget.printItem.imageAsset),
       ),
     );
   }
 
-  Widget _printerTile({required List<pi.BluetoothPrinter> printers, required pi.BluetoothPrinter printer,}) {
-    return ListTile(
-      onTap: () => _print(printers, printer,),
-      leading: const Icon(Icons.print),
-      title: Text(
-        printer.modelName,
-      ),
-      subtitle: Text(printer.macAddress),
+  Future<void> _print(BuildContext context) async {
+    // Request Permissions if they have not been granted.
+    // Note: If storage permission is not granted printing will fail
+    // with ERROR_WRONG_LABEL
+    if (!await Permission.storage.request().isGranted) {
+      _showSnack(context, "Access to storage is needed in order print.",
+          duration: const Duration(seconds: 2));
+      return;
+    }
+
+    // TODO Replace this by the image generation method.
+    ui.Image imageToPrint = await _generateImage(
+      fontSize: fontSize,
+      position: position,
+      tapeLength: tapeLength,
     );
-  }
 
-  Future<void> _print(List<pi.BluetoothPrinter> printers, pi.BluetoothPrinter selectedPrinter,) async {
-    try {
-      /// capture the widget image
-      //final bytes = await controller.capture();
+    // pi.Printer printer = pi.Printer();
+    await printer.setPrinterInfo(printerInfo);
+    pi.PrinterStatus status = await printer.printImage(imageToPrint);
 
-      // Get the IP Address from the first printer found.
-      printerInfo.macAddress = printers.single.macAddress;
-
-      await printer.setPrinterInfo(printerInfo);
-
-      ///Text Style
-      ui.TextStyle style = ui.TextStyle(
-        color: Colors.black,
-        fontSize: 60,
-      );
-
-      final paragraphStyle = ui.ParagraphStyle(
-        textDirection: TextDirection.ltr,
-      );
-
-      final paragraphBuilder = ui.ParagraphBuilder(paragraphStyle)
-        ..pushStyle(style)
-        ..addText(widget.printItem.title);
-        //..addPlaceholder(
-          //20,
-          //100,
-          //PlaceholderAlignment.middle,
-        //);
-      ///paragraph constraints required, w/o it optimized out error
-      const constraints = ui.ParagraphConstraints(width: 200);
-      final paragraph = paragraphBuilder.build();
-      paragraph.layout(constraints);
-      ///Setting offset in negative doesn't help, as it clips of the initial characters of the text
-      final status = await printer.printText(paragraph);
-
-      ///Image port, this works good.
-      //final bytes = await rootBundle.load(widget.printItem.imageAsset);
-      //final imgStatus = await printer.printImage(await bytesToImage(bytes.buffer.asUint8List()));
-      print('Got Status : $status');
-      //print('Got Status : $imgStatus');
-    } on Exception catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Something went wrong: ${e.toString()}'),
-        ),
-      );
+    if (status.errorCode != pi.ErrorCode.ERROR_NONE) {
+      // Show toast with error.
+      _showSnack(context,
+          "Print failed with error code: ${status.errorCode.getName()}",
+          duration: const Duration(seconds: 2));
     }
   }
 
-  Future<ui.Image> bytesToImage(Uint8List imgBytes) async {
-    ui.Codec codec = await ui.instantiateImageCodec(imgBytes);
-    ui.FrameInfo frame = await codec.getNextFrame();
-    return frame.image;
+  void _showSnack(BuildContext context, String content,
+      {Duration duration = const Duration(seconds: 1)}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      duration: duration,
+      content: Container(
+        padding: const EdgeInsets.all(8.0),
+        child: Text(content),
+      ),
+    ));
+  }
+
+  Future<ui.Image> _generateImage({
+    required double fontSize,
+    required double position,
+    required double tapeLength,
+  }) async {
+    ui.PictureRecorder recorder = ui.PictureRecorder();
+    Canvas canvas = Canvas(recorder);
+
+    double labelWidthPx = tapeLength * 7.5;
+    double labelHeightPx = 90;
+    double qrSizePx = labelHeightPx;
+    // Start Padding of the QR Code
+    double qrPaddingStart = 30;
+    // Start Padding of the Paragraph in relation to the QR Code
+    double paraPaddingStart = 10;
+    // Font Size for largest text
+    double primaryFontSize = fontSize;
+
+    Paint paint = Paint();
+    paint.color = const Color.fromRGBO(255, 255, 255, 1);
+    Rect bounds = Rect.fromLTWH(0, 0, labelWidthPx, labelHeightPx);
+    canvas.save();
+    canvas.drawRect(bounds, paint);
+
+    // Create Paragraph
+    ui.ParagraphBuilder paraBuilder =
+    ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.start));
+    // Add line
+    paraBuilder.pushStyle(
+        ui.TextStyle(fontSize: primaryFontSize, color: Colors.black));
+    paraBuilder.addText(widget.printItem.title);
+    Offset paraOffset = Offset(paraPaddingStart, position);
+    ui.Paragraph infoPara = paraBuilder.build();
+    // Layout the paragraph in the remaining space.
+    infoPara.layout(ui.ParagraphConstraints(
+        width: labelWidthPx - qrSizePx - qrPaddingStart - paraPaddingStart));
+    // Draw paragraph on canvas.
+    canvas.drawParagraph(infoPara, paraOffset);
+
+    // TODO Create QR Code
+    final qrImage = await QrPainter(
+      dataModuleStyle: const QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square, color: Colors.black),
+      eyeStyle:
+      const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
+      data: widget.printItem.title,
+      version: QrVersions.auto,
+      gapless: true,
+    ).toImage(labelHeightPx);
+
+    // Draw QR Code
+    // Center the QR vertically with a 20 px padding on start
+    Offset qrOffset =
+    Offset(labelWidthPx - qrSizePx, (labelHeightPx - qrSizePx) / 2);
+    canvas.drawImage(qrImage, qrOffset, paint);
+
+    ///by default widthPx = 9 * 200, default lengthPx = 3 * 200
+
+    ///Max 24 mm = 180 p
+    ///1mm = 180/24 = 7.5
+    ///12mm = 90
+
+    ///35mm (269.5 according to above calculation)
+    ///45mm (337.5)
+    ///55mm (412.5)
+    ///65mm (487.5)
+    var picture = await recorder
+        .endRecording()
+        .toImage(labelWidthPx.toInt(), labelHeightPx.toInt());
+
+    return picture;
+  }
+
+  Future<ByteData> _getWidgetImage() async {
+    ui.Image generatedImage = await _generateImage(
+        fontSize: fontSize, position: position, tapeLength: tapeLength);
+    ByteData? bytes =
+    await generatedImage.toByteData(format: ui.ImageByteFormat.png);
+    return bytes!;
   }
 }
 
